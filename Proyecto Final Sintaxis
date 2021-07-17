@@ -1,0 +1,799 @@
+program Analizador_Lexico;
+uses Identificador,crt,Archivo,TabSimb_Aplicacion, TabSimb;
+var
+  arch:t_arch;
+  control:integer;
+  lexema:string;
+  complex:string;
+  Condicion:char;
+  T_S:T_lista;
+  Salir:boolean;
+
+begin
+    Condicion:=' ';
+    Salir:=false;
+    while not Salir do
+      begin
+        ObtenerSiguienteCompLex(arch,control,complex,lexema,T_S,Salir);
+        recuperar_arch(control,condicion);
+      end;
+    Chequear_lista(T_S);
+    Readln;
+    clrscr;
+end.          
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+unit Identificador;
+
+{$mode objfpc}{$H+}
+
+
+interface
+
+uses
+  Classes, SysUtils, Archivo, TabSimb_Aplicacion, TabSimb;
+type
+  TComplex=(Identificador1,ConstanteEntera,ConstanteReal,OperadorRelacional);
+
+Function EsIdentificador(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+Function EsConstanteEntera(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+Function EsConstanteReal(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+Function EsOperadorRelacional(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+Function EsOpArit(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+Function EsCadena(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+//Function EsSimboloEspecial(var Fuente:t_arch;var Control:Longint;var Lexema:string):boolean;
+Procedure ObtenerSiguienteCompLex(Var Fuente:t_arch;Var Control:Longint; Var CompLex:string;Var Lexema:String;var TS:T_lista;var Salir:boolean);
+
+implementation
+
+
+Function EsIdentificador(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+  Const
+    q0=0;
+    F=[1];
+  Type
+    Q=0..2;
+    Sigma=(Letra, Digito,Especial, Otro);
+    TDelta=Array[Q,Sigma] of Q;
+  Var
+    EstadoActual:Q;
+    Delta:TDelta;
+    caracter:char;
+    nuevo_control:integer;
+
+  Function CarASimb(Car:Char):Sigma;
+Begin
+  Case Car of
+    'a'..'z', 'A'..'Z':CarASimb:=Letra;
+    '0'..'9'	     :CarASimb:=Digito;
+     '$',':',';',',','{','}','(',')','[',']','=','+','-','/','*','^':CarASimb:=Especial;
+  else
+   CarASimb:=Otro
+  End;
+End;
+
+  begin
+    Lexema:='';
+    nuevo_control:=control;
+    //Cargar Tabla;
+    Delta[0,Letra]:=1;
+    Delta[0,Digito]:=2;
+    Delta[0,Especial]:=2;
+    Delta[0,Otro]:=2;
+    Delta[1,Letra]:=1;
+    Delta[1,Digito]:=1;
+    Delta[1,Especial]:=1;
+    Delta[1,Otro]:=2;
+    Delta[2,Letra]:=2;
+    Delta[2,Digito]:=2;
+    Delta[2,Especial]:=2;
+    Delta[2,Otro]:=2;
+    //Recorrer la cadena
+    EstadoActual:=q0;
+    while not (EstadoActual in [1,2]) do
+      begin
+        recuperar_arch(nuevo_control,caracter);
+        EstadoActual:=Delta[EstadoActual,CarASimb(caracter)];
+        if EstadoActual=1 then
+        begin
+        Lexema:=Lexema+caracter;
+        inc(nuevo_control);     //usar variable auxiliar para luego asignarla si lo reconoce
+        end;
+      end;
+    if (EstadoActual in F) then
+    control:=nuevo_control;
+    EsIdentificador:=EstadoActual in F;
+  end;
+
+Function EsConstanteEntera(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+  Const
+    q0=0;
+    F=[2];
+  Type
+    Q=0..4;
+    Sigma=(Signo, Digito, Otro, Menos);
+    TDelta=Array[Q,Sigma] of Q;
+  Var
+    EstadoActual:Q;
+    Delta:TDelta;
+    caracter:char;
+    nuevo_control:integer;
+    nuevo_lexema:string;
+
+Function CarASimb(Car:Char):Sigma;
+  Begin
+    Case Car of
+      'a'..'z', 'A'..'Z':CarASimb:=Signo;
+      '0'..'9'	     :CarASimb:=Digito;
+      '-' :CarASimb:=Menos;
+    else
+     CarASimb:=Otro
+    End;
+  End;
+
+  begin
+    nuevo_lexema:='';
+    nuevo_control:=control;
+    //Cargar Tabla;
+    Delta[0,Signo]:=1;
+    Delta[0,Digito]:=2;
+    Delta[0,Otro]:=3;
+    Delta[1,Signo]:=3;
+    Delta[1,Digito]:=2;
+    Delta[1,Otro]:=3;
+    Delta[2,Signo]:=3;
+    Delta[2,Digito]:=2;
+    Delta[2,Otro]:=3;
+    Delta[3,Signo]:=3;
+    Delta[3,Digito]:=3;
+    Delta[3,Otro]:=3;
+    //Recorrer la cadena
+    EstadoActual:=q0;
+    while not (EstadoActual in [2,3]) do
+      begin
+        recuperar_arch(nuevo_control,caracter);
+        EstadoActual:=Delta[EstadoActual,CarASimb(caracter)];
+        if (EstadoActual=1) or (EstadoActual=3) then
+        begin
+        nuevo_lexema:=nuevo_lexema+caracter;
+        inc(nuevo_control);     //usar variable auxiliar para luego asignarla si lo reconoce
+        end;
+      end;
+    if (EstadoActual in F) then
+      begin
+        control:=nuevo_control;
+        Lexema:=nuevo_lexema;
+      end;
+    EsConstanteEntera:=EstadoActual in F;
+  end;
+
+Function EsConstanteReal(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+  Const
+    q0=0;
+    F=[3,4,8];
+  Type
+    Q=0..8;
+    Sigma=(Exponente,Signo, Digito, Punto, Otro);
+    TDelta=Array[Q,Sigma] of Q;
+  Var
+    EstadoActual:Q;
+    Delta:TDelta;
+    caracter:char;
+    nuevo_control:integer;
+    nuevo_lexema:string;
+
+Function CarASimb(Car:Char):Sigma;
+  Begin
+    Case Car of
+      'a'..'z', 'A'..'Z','-','+':CarASimb:=Signo;
+      '^':CarASimb:=Exponente;
+      '0'..'9':CarASimb:=Digito;
+      '.' :CarASimb:=Punto;
+    else
+     CarASimb:=Otro
+    End;
+  End;
+
+  begin
+    nuevo_lexema:='';
+    nuevo_control:=control;
+    //Cargar Tabla;
+    Delta[0,Exponente]:=7;
+                       Delta[0,Digito]:=2;
+                       Delta[0,Signo]:=1;
+                       Delta[0,Punto]:=7;
+                       Delta[0,Otro]:=7;
+                       Delta[1,Exponente]:=7;
+                       Delta[1,Digito]:=2;
+                       Delta[1,Signo]:=7;
+                       Delta[1,Punto]:=7;
+                       Delta[1,Otro]:=7;
+                       Delta[2,Exponente]:=5;
+                       Delta[2,Digito]:=2;
+                       Delta[2,Signo]:=7;
+                       Delta[2,Punto]:=3;
+                       Delta[2,Otro]:=7;
+                       Delta[3,Exponente]:=5;
+                       Delta[3,Digito]:=4;
+                       Delta[3,Signo]:=7;
+                       Delta[3,Punto]:=7;
+                       Delta[3,Otro]:=7;
+                       Delta[4,Exponente]:=5;
+                       Delta[4,Digito]:=4;
+                       Delta[4,Signo]:=7;
+                       Delta[4,Punto]:=7;
+                       Delta[4,Otro]:=7;
+                       Delta[5,Exponente]:=7;
+                       Delta[5,Digito]:=8;
+                       Delta[5,Signo]:=7;
+                       Delta[5,Punto]:=7;
+                       Delta[5,Otro]:=7;
+                       Delta[6,Exponente]:=7;
+                       Delta[6,Digito]:=8;
+                       Delta[6,Signo]:=7;
+                       Delta[6,Punto]:=7;
+                       Delta[6,Otro]:=7;
+                       Delta[7,Exponente]:=7;
+                       Delta[7,Digito]:=7;
+                       Delta[7,Signo]:=7;
+                       Delta[7,Punto]:=7;
+                       Delta[7,Otro]:=7;
+                       Delta[8,Exponente]:=7;
+                       Delta[8,Digito]:=8;
+                       Delta[8,Signo]:=7;
+                       Delta[8,Punto]:=7;
+                       Delta[8,Otro]:=7;
+    //Recorrer la cadena
+    EstadoActual:=q0;
+    while not (EstadoActual in [3,4,8]) do
+      begin
+        recuperar_arch(nuevo_control,caracter);
+        EstadoActual:=Delta[EstadoActual,CarASimb(caracter)];
+        if (EstadoActual=1) or (EstadoActual=3) or (EstadoActual=2) or (EstadoActual=5)then
+        begin
+        nuevo_lexema:=nuevo_lexema+caracter;
+        inc(nuevo_control);     //usar variable auxiliar para luego asignarla si lo reconoce
+        end;
+      end;
+    if (EstadoActual in F) then
+      begin
+        control:=nuevo_control;
+        Lexema:=nuevo_lexema;
+      end;
+    EsConstanteReal:=EstadoActual in F;
+  end;
+
+Function EsOperadorRelacional(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+  Const
+    q0=0;
+    F=[1,2,4];
+  Type
+    Q=0..5;
+    Sigma=(Menor, Mayor, Distinto, Igual, MenorIgual, MayorIgual, Otro);
+    TDelta=Array[Q,Sigma] of Q;
+  Var
+    EstadoActual:Q;
+    Delta:TDelta;
+    caracter1:char;
+    caracter2:char;
+    nuevo_control:integer;
+    nuevo_lexema:string;
+    pos:integer;
+
+Function CarASimb(Car1:Char;car2:Char):Sigma;
+  Begin
+    if (car1='<') and (car2='>') then
+     CarASimb:=Distinto
+    else
+      if (car1='<') and (car2='=') then
+       CarASimb:=MenorIgual
+    else
+      if (car1='>') and (car2='=') then
+       CarASimb:=MayorIgual;
+    Case Car1 of
+      '<':CarASimb:=Menor;
+      '>':CarASimb:=Mayor;
+      '=' :CarASimb:=Igual;
+    else
+     CarASimb:=Otro
+    End;
+  End;
+
+  begin
+    nuevo_lexema:='';
+    nuevo_control:=control;
+    //Cargar Tabla;
+    Delta[0,Mayor]:=1;
+                       Delta[0,Menor]:=4;
+                       Delta[0,Igual]:=3;
+                       Delta[0,Otro]:=5;
+                       Delta[1,Mayor]:=5;
+                       Delta[1,Menor]:=2;
+                       Delta[1,Igual]:=2;
+                       Delta[1,Otro]:=5;
+                       Delta[2,Mayor]:=5;
+                       Delta[2,Menor]:=5;
+                       Delta[2,Igual]:=5;
+                       Delta[2,Otro]:=5;
+                       Delta[3,Mayor]:=5;
+                       Delta[3,Menor]:=5;
+                       Delta[3,Igual]:=2;
+                       Delta[3,Otro]:=5;
+                       Delta[4,Mayor]:=5;
+                       Delta[4,Menor]:=5;
+                       Delta[4,Igual]:=2;
+                       Delta[4,Otro]:=5;
+                       Delta[5,Mayor]:=5;
+                       Delta[5,Menor]:=5;
+                       Delta[5,Igual]:=5;
+                       Delta[5,Otro]:=5;
+    //Recorrer la cadena
+    EstadoActual:=q0;
+    while not (EstadoActual in [1,2,4]) do
+      begin
+        recuperar_arch(nuevo_control,caracter1);
+        if caracter1='<' then
+         begin
+          pos:=nuevo_control+1;
+          recuperar_arch(pos,caracter2);
+         end
+        else
+        if caracter1='>' then
+         begin
+          pos:=nuevo_control+1;
+          recuperar_arch(pos,caracter2);
+         end;
+        EstadoActual:=Delta[EstadoActual,CarASimb(caracter1,caracter2)];
+        if EstadoActual = 1 then
+          begin
+            if (caracter1='<') and (caracter2='>') then
+             begin
+               Lexema:=Lexema+caracter1+caracter2;
+               inc(nuevo_control,2);
+             end
+            else
+            if (caracter1='<') and (caracter2='=') then
+             begin
+               Lexema:=Lexema+caracter1+caracter2;
+               inc(nuevo_control,2);
+             end
+            else
+            if (caracter1='>') and (caracter2='=') then
+             begin
+               Lexema:=Lexema+caracter1+caracter2;
+               inc(nuevo_control,2);
+             end
+            else
+            if EstadoActual = 1 then
+            begin
+              Lexema:=Lexema+caracter1;
+              inc(nuevo_control);     //usar variable auxiliar para luego asignarla si lo reconoce
+            end;
+          end;
+      end;
+    if (EstadoActual in F) then
+      begin
+        control:=nuevo_control;
+      end;
+    EsOperadorRelacional:=EstadoActual in F;
+  end;
+
+Function EsOpArit(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+  Const
+    q0=0;
+    F=[3];
+  Type
+    Q=0..3;
+    Sigma=(Mas, Menos, Por, Dividido, Otro);
+    TDelta=Array[Q,Sigma] of Q;
+  Var
+    EstadoActual:Q;
+    Delta:TDelta;
+    caracter:char;
+    nuevo_control:integer;
+
+  Function CarASimb(Car:Char):Sigma;
+Begin
+  Case Car of
+    '+':CarASimb:=Mas;
+    '-':CarASimb:=Menos;
+    '*':CarASimb:=Por;
+    '/':CarASimb:=Dividido;
+  else
+   CarASimb:=Otro
+  End;
+End;
+
+  begin
+    Lexema:='';
+    nuevo_control:=control;
+    //Cargar Tabla;
+    Delta[0,Mas]:=1;
+    Delta[0,Menos]:=1;
+    Delta[0,Por]:=1;
+    Delta[0,Dividido]:=1;
+    Delta[0,Otro]:=2;
+    Delta[1,Mas]:=3;
+    Delta[1,Menos]:=3;
+    Delta[1,Por]:=3;
+    Delta[1,Dividido]:=3;
+    Delta[1,Otro]:=3;
+    Delta[2,Mas]:=2;
+    Delta[2,Menos]:=2;
+    Delta[2,Por]:=2;
+    Delta[2,Dividido]:=2;
+    Delta[2,Otro]:=2;
+    Delta[3,Mas]:=3;
+    Delta[3,Menos]:=3;
+    Delta[3,Por]:=3;
+    Delta[3,Dividido]:=3;
+    Delta[3,Otro]:=3;
+    //Recorrer la cadena
+    EstadoActual:=q0;
+    while not (EstadoActual in [2,3]) do
+      begin
+        recuperar_arch(nuevo_control,caracter);
+        EstadoActual:=Delta[EstadoActual,CarASimb(caracter)];
+        if EstadoActual=1 then
+        begin
+        Lexema:=Lexema+caracter;
+        inc(nuevo_control);     //usar variable auxiliar para luego asignarla si lo reconoce
+        end;
+      end;
+    if (EstadoActual in F) then
+    control:=nuevo_control;
+    EsOpArit:=EstadoActual in F;
+  end;
+
+Function EsCadena(var Fuente:t_arch;var Control:Longint;var Lexema:string): Boolean;
+  Const
+    q0=0;
+    F=[2];
+  Type
+    Q=0..3;
+    Sigma=(Comilla,Caracter, Otro);
+    TDelta=Array[Q,Sigma] of Q;
+  Var
+    EstadoActual:Q;
+    Delta:TDelta;
+    carac:char;
+    nuevo_control:integer;
+
+  Function CarASimb(Car:Char):Sigma;
+Begin
+  if Car='"' then
+    CarASimb:=Comilla
+  else
+   CarASimb:=Caracter;
+  End;
+
+  begin
+    Lexema:='';
+    nuevo_control:=control;
+    //Cargar Tabla;
+    Delta[0,Comilla]:=1;
+    Delta[0,Caracter]:=3;
+    Delta[0,Otro]:=3;
+    Delta[1,Comilla]:=2;
+    Delta[1,Caracter]:=1;
+    Delta[1,Otro]:=3;
+    Delta[2,Comilla]:=3;
+    Delta[2,Caracter]:=3;
+    Delta[2,Otro]:=3;
+    Delta[3,Comilla]:=3;
+    Delta[3,Caracter]:=3;
+    Delta[3,otro]:=3;
+    //Recorrer la cadena
+    EstadoActual:=q0;
+    while not (EstadoActual in [2,3]) do
+      begin
+        recuperar_arch(nuevo_control,carac);
+        EstadoActual:=Delta[EstadoActual,CarASimb(carac)];
+        if (EstadoActual=1) or (EstadoActual=2) then
+        begin
+        Lexema:=Lexema+carac;
+        inc(nuevo_control);     //usar variable auxiliar para luego asignarla si lo reconoce
+        end;
+      end;
+    if (EstadoActual in F) then
+    control:=nuevo_control;
+    EsCadena:=EstadoActual in F;
+  end;
+
+//function EsSimboloEspecial(var Fuente:t_arch;var Control:Longint;var Lexema:string):boolean;
+//var
+  //caracter:char;
+ // begin
+    //recuperar_arch(control,caracter);
+    //if (caracter =' ') or (caracter=#0) or (caracter=#1) or (caracter=#2) or (caracter=#3) or (caracter=#4) or (caracter=#5) or (caracter=#6) or (caracter=#7) or (caracter=#8) or (caracter=#9) or (caracter=#10) or (caracter=#11) or (caracter=#12) or (caracter=#13) or (caracter=#14)  or (caracter=#15) or (caracter=#16) or (caracter=#17) or (caracter=#18) or (caracter=#19) or (caracter=#20) or (caracter=#21) or (caracter=#22) or (caracter=#23) or (caracter=#24) or (caracter=#25) or (caracter=#26) or (caracter=#27) or (caracter=#28) or (caracter=#29) or (caracter=#30) or (caracter=#31) then
+     // begin
+        //inc(control);
+        //EsSimboloEspecial:=true;
+      //end
+    //else
+    //if caracter ='$' then
+     // begin
+        //EsSimboloEspecial:=true;
+        //Lexema:='$'
+      //end;
+
+  //end;
+
+Procedure ObtenerSiguienteCompLex(Var Fuente:t_arch;Var Control:Longint; Var CompLex:string;Var Lexema:String;var TS:T_lista;var Salir:boolean);
+  begin
+    If EsIdentificador(Fuente,Control,Lexema) then
+                  begin
+                  CompLex:='Identificador';
+                  InstalarEnTS(Lexema,TS,CompLex)
+                  end
+    else If EsConstanteReal(Fuente,Control,Lexema) then
+		  begin
+                  CompLex:='ConstReal';
+                  InstalarEnTS(Lexema,TS,CompLex)
+                  end
+    else If EsConstanteEntera(Fuente,Control,Lexema) then
+		  begin
+                  CompLex:='ConstEntera';
+                  InstalarEnTS(Lexema,TS,CompLex)
+                  end
+    else if EsOperadorRelacional(Fuente,Control,Lexema) then
+                  begin
+                  CompLex:='OpRel';
+                  InstalarEnTS(Lexema,TS,CompLex)
+                  end
+    else if EsCadena(Fuente,Control,Lexema) then
+                  begin
+                  CompLex:='Cadena';
+                  InstalarEnTS(Lexema,TS,CompLex)
+                  end
+    //else if EsSimboloEspecial(Fuente,Control,Lexema) then
+                 // begin
+                  //if Lexema='$' then
+                  //Salir:=True;
+                  //CompLex:='SimbEsp';
+                  //InstalarEnTS(Lexema,TS,CompLex)
+                  //end
+    //else if Not EsSimboloEspecial(Fuente,Control,Lexema,CompLex) then
+      //CompLex:=ErrorLexico
+  end;
+end.
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+unit Archivo;
+
+{$mode objfpc}{$H+}
+
+interface
+uses
+  crt,Sysutils;
+const
+  ruta='ArchAL.txt';
+
+type
+  t_arch=file of char;
+
+procedure abrir_archivo(var archivo:t_arch);
+procedure recuperar_arch(var pos:integer;var caracter:char);
+implementation
+procedure abrir_archivo(var archivo:t_arch);
+     begin
+       AssignFile(archivo,ruta);
+       if not FileExists(ruta) then
+       begin
+           Rewrite(archivo);
+           CloseFile(archivo);
+       end;
+       reset(archivo);
+     end;
+
+procedure recuperar_arch(var pos:integer;var caracter:char);
+   var
+     archivo:t_arch;
+   begin
+     abrir_archivo(archivo);
+     if pos<filesize(archivo) then
+       begin
+         seek(archivo,pos);
+         read(archivo,caracter);
+       end;
+     close(archivo);
+   end;
+end.
+                                       
+                                       
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+unit TabSimb_Aplicacion;
+
+{$mode objfpc}{$H+}
+
+interface
+
+uses
+  TabSimb,crt;
+
+
+procedure baja(var L:T_lista);
+procedure Chequear_lista(var L:T_lista);
+procedure InstalarEnTS(Lexema:string;var TS:T_lista;CompLex:String);
+
+
+
+implementation
+
+procedure baja(var L:T_lista);
+var
+  buscado:String[10];
+  E:T_dato;
+  begin
+    write('Nombre a borrar: ');
+    readln(buscado);
+    Eliminar(L,buscado,E);
+  end;
+
+procedure listar(L:T_lista);
+var
+  E:T_dato;
+  begin
+    Primero(L);
+    while (not fin(L)) do
+     begin
+       Recuperar(L,E);
+       write(E.CompLex, ' ');
+       writeln(E.Lexema);
+       Siguiente(L);
+     end;
+  end;
+
+procedure Chequear_lista(var L:T_lista);
+  begin
+    if not lista_vacia(L) then listar(L) else write('Lista vacia');
+
+  end;
+
+
+procedure InstalarEnTS(Lexema:string;var TS:T_lista;CompLex:string);
+var
+  R:T_dato;
+
+ begin
+   R.Lexema:=Lexema;
+   R.CompLex:=CompLex;
+   cargar(TS,R)
+ end;
+end.
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+unit TabSimb;
+
+{$mode objfpc}{$H+}
+
+interface
+
+type
+    T_dato=Record
+      Lexema:String;
+      CompLex:String;
+    end;
+
+    T_Punt=^T_nodo;
+
+    T_lista=Record
+      tam:integer;
+      Act,Cab:T_punt;
+    end;
+
+    T_Nodo=Record
+      Info:T_Dato;
+      Sig:T_punt;
+    end;
+
+procedure cargar(var L:T_lista; E:T_Dato);
+procedure eliminar(var L:T_lista; buscado:string; var E:T_dato);
+procedure recuperar(L:T_lista; var E:T_dato);
+function lista_llena(L:T_lista):boolean;
+function lista_vacia(L:T_lista):boolean;
+procedure Primero(var L:T_lista);
+function Fin(L:T_lista):boolean;
+procedure Siguiente(var L:T_lista);
+
+
+implementation
+
+procedure cargar(var L:T_lista; E:T_Dato);
+ var
+   Dir,ant:T_punt;
+  begin
+    new(Dir);
+    Dir^.Info:=E;
+     If (L.Cab=NIL) then
+       begin
+         Dir^.Sig:=L.cab;
+         L.Cab:=Dir;
+       end
+     else
+      begin
+        Ant:=L.Cab;
+        L.Act:=L.Cab^.Sig;
+         while (L.Act<>NIL) do
+          begin
+            Ant:=L.Act;
+            L.Act:=L.Act^.Sig;
+          end;
+         Ant^.Sig:=Dir;
+         Dir^.Sig:=L.Act;
+      end;
+      inc(L.tam);
+  end;
+
+procedure eliminar(var L:T_lista; buscado:string; var E:T_dato);
+ var
+   ant:T_punt;
+  begin
+    if L.Cab^.Info.Lexema=buscado then
+      begin
+        E:=L.Cab^.Info;
+        L.Act:=L.Cab;
+        L.Cab:=L.Cab^.Sig;
+        dispose(L.Act);
+      end
+    else
+     begin
+        Ant:=L.Cab;
+        L.Act:=L.Cab^.Sig;
+         while (L.Act<>NIL) and (L.Act^.Info.Lexema<>buscado) do
+          begin
+             Ant:=L.Act;
+             L.Act:=L.Act^.Sig;
+          end;
+         E:=L.Act^.Info;
+         Ant^.Sig:=L.Act^.Sig;
+         dispose(L.Act);
+     end;
+     dec(L.tam);
+  end;
+
+procedure recuperar(L:T_lista; var E:T_dato);
+  begin
+    E:=L.Act^.Info;
+  end;
+
+function lista_llena(L:T_lista):boolean;
+  begin
+   lista_llena:=getheapstatus.totalfree<SizeOf(T_Nodo)
+  end;
+
+function lista_vacia(L:T_lista):boolean;
+  begin
+   lista_vacia:=(L.tam=0);
+  end;
+
+procedure Primero(var L:T_lista);
+  begin
+   L.Act:=L.Cab;
+  end;
+
+function Fin(L:T_lista):boolean;
+  begin
+   Fin:=L.Act=NIL;
+  end;
+
+procedure Siguiente(var L:T_lista);
+  begin
+   L.Act:=L.Act^.Sig;
+  end;
+end.                                          
+                                       
+                                       
+
+
+
